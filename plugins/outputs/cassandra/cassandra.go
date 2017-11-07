@@ -26,7 +26,7 @@ type Cassandra struct {
 	URLs             []string `toml:"urls"`
 	Username         string
 	Password         string
-	Database         string
+	Keyspace         string `toml:"keyspace"`
 	UserAgent        string
 	RetentionPolicy  string
 	WriteConsistency string
@@ -99,7 +99,7 @@ func (i *Cassandra) Connect() error {
 	var urls []string
 	urls = append(urls, i.URLs...)
 	cluster := gocql.NewCluster(i.URLs...)
-	cluster.Keyspace = "example"
+	cluster.Keyspace = i.Keyspace
 	cluster.Consistency = gocql.Quorum
 	i.session, _ = cluster.CreateSession()
 
@@ -130,15 +130,15 @@ func (i *Cassandra) Description() string {
 func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 	//r := metric.NewReader(metrics)
 	//TODO: performance test against batching
+	//create keyspace telegraf WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
+	//create table telegraf.test (   name text, data text, id text, primary key(name) );
 	// This will get set to nil if a successful write occurs
 	err := fmt.Errorf("Could not write to any cassandra server in cluster")
 	log.Printf("Not implemented")
 	insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
 		var name = metric.Name()
-		name = name + " "
-		insertBatch.Query("INSERT INTO cas_table (title, revid, last_modified) VALUES ('_foo', 2c3af400-73a4-11e5-9381-29463d90c3f0, DATEOF(NOW()))")
-		insertBatch.Query("INSERT INTO cas_table (title, revid, last_modified) VALUES ('_foo', 3e4ad2f1-73a4-11e5-9381-29463d90c3f0, DATEOF(NOW()))")
+		insertBatch.Query(`INSERT INTO test (name) VALUES (?)`, name)
 		if err := i.session.ExecuteBatch(insertBatch); err != nil {
 			return err
 		}
