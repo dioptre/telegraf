@@ -1,8 +1,8 @@
 package cassandra
 
 import (
+	"encoding/json"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
@@ -128,23 +128,20 @@ func (i *Cassandra) Description() string {
 // Write will choose a random server in the cluster to write to until a successful write
 // occurs, logging each unsuccessful. If all servers fail, return error.
 func (i *Cassandra) Write(metrics []telegraf.Metric) error {
-	//r := metric.NewReader(metrics)
 	//TODO: performance test against batching
-	//create keyspace telegraf WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };
-	//create table telegraf.test (   name text, data text, id text, primary key(name) );
 	// This will get set to nil if a successful write occurs
 	err := fmt.Errorf("Could not write to any cassandra server in cluster")
-	log.Printf("Not implemented")
 	insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
-		var name = metric.Name()
-		insertBatch.Query(`INSERT INTO test (name) VALUES (?)`, name)
-		if err := i.session.ExecuteBatch(insertBatch); err != nil {
-			return err
+		var tags = metric.Tags()
+		id := tags["id"]
+		if id == "" {
+			tags["id"] = gocql.TimeUUID().String()
 		}
-
+		serialized, _ := json.Marshal(tags)
+		insertBatch.Query(`INSERT INTO logs JSON ?`, string(serialized))
 	}
-
+	err = i.session.ExecuteBatch(insertBatch)
 	return err
 }
 
