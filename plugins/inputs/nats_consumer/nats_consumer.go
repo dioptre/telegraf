@@ -205,7 +205,7 @@ func init() {
 	inputs.Add("nats_consumer", func() telegraf.Input {
 		return &natsConsumer{
 			Servers:             []string{"nats://localhost:4222"},
-			Secure:              false,
+			Secure:              true,
 			Subjects:            []string{"telegraf"},
 			QueueGroup:          "telegraf_consumers",
 			PendingBytesLimit:   nats.DefaultSubPendingBytesLimit,

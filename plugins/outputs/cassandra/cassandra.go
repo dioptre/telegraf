@@ -43,7 +43,7 @@ type Cassandra struct {
 	// Path to cert key file
 	SSLKey string `toml:"ssl_key"`
 	// Use SSL but skip chain & host verification
-	InsecureSkipVerify bool
+	VerifyHost bool `toml:"verify_host"`
 
 	// Precision is only here for legacy support. It will be ignored.
 	Precision string
@@ -101,6 +101,18 @@ func (i *Cassandra) Connect() error {
 	cluster := gocql.NewCluster(i.URLs...)
 	cluster.Keyspace = i.Keyspace
 	cluster.Consistency = gocql.Quorum
+	if i.SSLCA != "" {
+		sslOpts := &gocql.SslOptions{
+			CaPath:                 i.SSLCA,
+			EnableHostVerification: i.VerifyHost,
+		}
+		if i.SSLCert != "" && i.SSLKey != "" {
+			sslOpts.CertPath = i.SSLCert
+			sslOpts.KeyPath = i.SSLKey
+		}
+		cluster.SslOpts = sslOpts
+	}
+
 	i.session, _ = cluster.CreateSession()
 
 	rand.Seed(time.Now().UnixNano())
@@ -134,9 +146,11 @@ func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 	insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
 		var tags = metric.Tags()
-		id := tags["id"]
-		if id == "" {
+		if tags["id"] == "" {
 			tags["id"] = gocql.TimeUUID().String()
+		}
+		if tags["updated"] == "" {
+			tags["updated"] = time.Now().Truncate(time.Millisecond).UTC().String()
 		}
 		serialized, _ := json.Marshal(tags)
 		insertBatch.Query(`INSERT INTO logs JSON ?`, string(serialized))
