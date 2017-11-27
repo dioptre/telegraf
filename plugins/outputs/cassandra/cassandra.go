@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"time"
 
@@ -44,6 +45,8 @@ type Cassandra struct {
 	SSLKey string `toml:"ssl_key"`
 	// Use SSL but skip chain & host verification
 	VerifyHost bool `toml:"verify_host"`
+
+	Retry bool `toml:"retry"`
 
 	// Precision is only here for legacy support. It will be ignored.
 	Precision string
@@ -146,16 +149,18 @@ func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 	insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
 		var tags = metric.Tags()
+		//fmt.Println("%s", tags); //Debugging only
 		if tags["id"] == "" {
 			tags["id"] = gocql.TimeUUID().String()
-		}
-		if tags["updated"] == "" {
-			tags["updated"] = time.Now().Truncate(time.Millisecond).UTC().String()
 		}
 		serialized, _ := json.Marshal(tags)
 		insertBatch.Query(`INSERT INTO logs JSON ?`, string(serialized))
 	}
 	err = i.session.ExecuteBatch(insertBatch)
+	if !i.Retry && err != nil {
+		fmt.Fprintf(os.Stderr, "!E CASSANDRA OUTPUT PLUGIN - NOT RETRYING %s", err.Error())
+		err = nil //Do not retry
+	}
 	return err
 }
 
