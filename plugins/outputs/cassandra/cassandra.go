@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -144,19 +145,41 @@ func (i *Cassandra) Description() string {
 // occurs, logging each unsuccessful. If all servers fail, return error.
 func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 	//TODO: performance test against batching
+	//fmt.Fprintf(os.Stderr, "Input packet", metrics)
 	// This will get set to nil if a successful write occurs
 	err := fmt.Errorf("Could not write to any cassandra server in cluster")
-	insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
+	counters := make(map[string]int)
+	regexCount, _ := regexp.Compile(`\.count\.(.*)`)
+	//insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
 		var tags = metric.Tags()
-		//fmt.Println("%s", tags); //Debugging only
-		if tags["id"] == "" {
-			tags["id"] = gocql.TimeUUID().String()
+		//fmt.Println("%s", tags) //Debugging only
+		if regexCount.MatchString(tags["name"]) {
+			counter := regexCount.FindStringSubmatch(tags["name"])[1]
+			counters[counter] = counters[counter] + 1
+		} else {
+			if tags["id"] == "" {
+				tags["id"] = gocql.TimeUUID().String()
+			}
+			serialized, _ := json.Marshal(tags)
+			//insertBatch.Query(`INSERT INTO logs JSON ?`, string(serialized))
+			if rowError := i.session.Query(`INSERT INTO logs JSON ?`, string(serialized)).Exec(); rowError != nil {
+				err = rowError //And let it continue
+			} else {
+				err = nil
+			}
 		}
-		serialized, _ := json.Marshal(tags)
-		insertBatch.Query(`INSERT INTO logs JSON ?`, string(serialized))
 	}
-	err = i.session.ExecuteBatch(insertBatch)
+
+	for key, value := range counters {
+		if rowError := i.session.Query(`UPDATE counters set total=total+? where id=?;`, value, key).Exec(); rowError != nil {
+			err = rowError //And let it continue
+		} else {
+			err = nil
+		}
+	}
+
+	//err = i.session.ExecuteBatch(insertBatch)
 	if !i.Retry && err != nil {
 		fmt.Fprintf(os.Stderr, "!E CASSANDRA OUTPUT PLUGIN - NOT RETRYING %s", err.Error())
 		err = nil //Do not retry
