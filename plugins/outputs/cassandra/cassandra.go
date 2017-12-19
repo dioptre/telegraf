@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -150,6 +151,7 @@ func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 	err := fmt.Errorf("Could not write to any cassandra server in cluster")
 	counters := make(map[string]int)
 	regexCount, _ := regexp.Compile(`\.count\.(.*)`)
+	regexUpdate, _ := regexp.Compile(`\.update\.(.*)`)
 	//insertBatch := i.session.NewBatch(gocql.UnloggedBatch)
 	for _, metric := range metrics {
 		var tags = metric.Tags()
@@ -157,6 +159,22 @@ func (i *Cassandra) Write(metrics []telegraf.Metric) error {
 		if regexCount.MatchString(tags["name"]) {
 			counter := regexCount.FindStringSubmatch(tags["name"])[1]
 			counters[counter] = counters[counter] + 1
+		} else if regexUpdate.MatchString(tags["name"]) && tags["msg"] != "" {
+			timestamp := time.Now().UTC()
+			if tags["updated"] != "" {
+				millis, err := strconv.ParseInt(tags["updated"], 10, 64)
+				if err == nil {
+					timestamp = time.Unix(0, millis*int64(time.Millisecond))
+				}
+			}
+			if rowError := i.session.Query(`INSERT INTO updates (id, updated, msg) values (?,?,?)`,
+				regexUpdate.FindStringSubmatch(tags["name"])[1],
+				timestamp,
+				tags["msg"]).Exec(); rowError != nil {
+				err = rowError //And let it continue
+			} else {
+				err = nil
+			}
 		} else {
 			if tags["id"] == "" {
 				tags["id"] = gocql.TimeUUID().String()
