@@ -77,7 +77,7 @@ var sampleConfig = `
   # ssl_cert = "/etc/telegraf/cert.pem"
   # ssl_key = "/etc/telegraf/key.pem"
   ## Use SSL but skip chain & host verification
-  # insecure_skip_verify = false
+  # verify_host = false
 
   ## Sets the limits for pending msgs and bytes for each subscription
   ## These shouldn't need to be adjusted except in very high throughput scenarios
