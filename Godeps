@@ -1,4 +1,5 @@
 collectd.org 2ce144541b8903101fb8f1483cc0497a68798122
+github.com/gocql/gocql 12e3a8c05db483441932e84ab6c35c339fb01de7
 github.com/aerospike/aerospike-client-go 95e1ad7791bdbca44707fedbb29be42024900d9c
 github.com/amir/raidman c74861fe6a7bb8ede0a010ce4485bdbb4fc4c985
 github.com/apache/thrift 4aaa92ece8503a6da9bc6701604f69acf2b99d07
