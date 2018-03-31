@@ -150,7 +150,7 @@ func (n *natsConsumer) Start(acc telegraf.Accumulator) error {
 		}
 
 		opts.TLSConfig = &tls.Config{
-			InsecureSkipVerify: n.VerifyHost,
+			InsecureSkipVerify: !n.VerifyHost,
 			Certificates:       []tls.Certificate{cert},
 			RootCAs:            pool,
 			MinVersion:         tls.VersionTLS12,
