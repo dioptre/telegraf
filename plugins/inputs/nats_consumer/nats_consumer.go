@@ -1,7 +1,10 @@
 package natsconsumer
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"sync"
 
@@ -27,6 +30,15 @@ type natsConsumer struct {
 	Subjects   []string
 	Servers    []string
 	Secure     bool
+
+	// Path to CA file
+	SSLCA string `toml:"ssl_ca"`
+	// Path to host cert file
+	SSLCert string `toml:"ssl_cert"`
+	// Path to cert key file
+	SSLKey string `toml:"ssl_key"`
+	// Use SSL but skip chain & host verification
+	VerifyHost bool `toml:"verify_host"`
 
 	// Client pending limits:
 	PendingMessageLimit int
@@ -59,6 +71,13 @@ var sampleConfig = `
   # subjects = ["telegraf"]
   ## name a queue group
   # queue_group = "telegraf_consumers"
+
+  ## Optional SSL Config
+  # ssl_ca = "/etc/telegraf/ca.pem"
+  # ssl_cert = "/etc/telegraf/cert.pem"
+  # ssl_key = "/etc/telegraf/key.pem"
+  ## Use SSL but skip chain & host verification
+  # verify_host = false
 
   ## Sets the limits for pending msgs and bytes for each subscription
   ## These shouldn't need to be adjusted except in very high throughput scenarios
@@ -110,7 +129,33 @@ func (n *natsConsumer) Start(acc telegraf.Accumulator) error {
 	// override servers if any were specified
 	opts.Servers = n.Servers
 
+	// override secure switch
 	opts.Secure = n.Secure
+
+	// setup client certificate
+	if n.Secure {
+		cert, err := tls.LoadX509KeyPair(n.SSLCert, n.SSLKey)
+		if err != nil {
+			log.Fatalf("error parsing X509 certificate/key pair: %v", err)
+		}
+
+		pool := x509.NewCertPool()
+		rootPEM, err := ioutil.ReadFile(n.SSLCA)
+		if err != nil || rootPEM == nil {
+			log.Fatalf("error parsing CA certificate: %v", err)
+		}
+		ok := pool.AppendCertsFromPEM(rootPEM)
+		if !ok {
+			log.Fatalf("error processing CA certificate")
+		}
+
+		opts.TLSConfig = &tls.Config{
+			InsecureSkipVerify: !n.VerifyHost,
+			Certificates:       []tls.Certificate{cert},
+			RootCAs:            pool,
+			MinVersion:         tls.VersionTLS12,
+		}
+	}
 
 	if n.Conn == nil || n.Conn.IsClosed() {
 		n.Conn, connectErr = opts.Connect()

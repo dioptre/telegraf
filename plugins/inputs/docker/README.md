@@ -31,6 +31,11 @@ to gather stats from the [Engine API](https://docs.docker.com/engine/api/v1.20/)
   container_name_include = []
   container_name_exclude = []
 
+  ## Container states to include and exclude. Globs accepted.
+  ## When empty only containers in the "running" state will be captured.
+  # container_state_include = []
+  # container_state_exclude = []
+
   ## Timeout for docker list, info, and stats commands
   timeout = "5s"
 
@@ -199,6 +204,9 @@ based on the availability of per-cpu stats on your system.
     - network
 - docker_container_blkio specific:
     - device
+- docker_container_health specific:
+    - health_status
+    - failing_streak
 - docker_swarm specific:
     - service_id
     - service_name
